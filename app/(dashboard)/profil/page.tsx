@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Mail, MapPin, CalendarDays, Camera, Pencil } from "lucide-react"
+import { Mail, MapPin, CalendarDays, Camera, Pencil, Save } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,6 +25,10 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
 }
 
+function formatMoney(value: number): string {
+  return `RM ${value.toFixed(2)}`
+}
+
 export default function ProfilePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -41,7 +45,9 @@ export default function ProfilePage() {
   const [location, setLocation] = useState("")
   const [role, setRole] = useState("")
   const [joined, setJoined] = useState("")
+  const [weeklySalary, setWeeklySalary] = useState<number | null>(null)
 
+  const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<
     { type: "success" | "error"; message: string } | null
@@ -74,7 +80,9 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name, role, ic_no, phone, job_title, company, bio, location")
+        .select(
+          "full_name, role, ic_no, phone, job_title, company, bio, location, weekly_salary"
+        )
         .eq("id", user.id)
         .maybeSingle()
 
@@ -101,6 +109,7 @@ export default function ProfilePage() {
       if (profile?.company) setCompany(profile.company)
       setBio(profile?.bio ?? "")
       setLocation(profile?.location ?? "")
+      setWeeklySalary(profile?.weekly_salary ?? null)
 
       setLoading(false)
     }
@@ -135,6 +144,16 @@ export default function ProfilePage() {
         ? { type: "error", message: error.message }
         : { type: "success", message: "Profil berjaya dikemas kini." }
     )
+    if (!error) setIsEditing(false)
+  }
+
+  function handleToggleEdit() {
+    setFeedback(null)
+    if (isEditing) {
+      handleSave()
+    } else {
+      setIsEditing(true)
+    }
   }
 
   if (loading) {
@@ -208,9 +227,22 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <Button className="gap-2">
-            <Pencil className="size-4" />
-            Sunting Profil
+          <Button
+            className="gap-2"
+            onClick={handleToggleEdit}
+            disabled={saving}
+          >
+            {isEditing ? (
+              <>
+                <Save className="size-4" />
+                {saving ? "Menyimpan…" : "Simpan"}
+              </>
+            ) : (
+              <>
+                <Pencil className="size-4" />
+                Ubah
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
@@ -241,6 +273,8 @@ export default function ProfilePage() {
                     id="firstName"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
+                    readOnly={!isEditing}
+                    disabled={!isEditing}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -249,11 +283,13 @@ export default function ProfilePage() {
                     id="lastName"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
+                    readOnly={!isEditing}
+                    disabled={!isEditing}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Emel</Label>
-                  <Input id="email" type="email" value={email} readOnly />
+                  <Input id="email" type="email" value={email} readOnly disabled />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="phone">Telefon</Label>
@@ -262,15 +298,16 @@ export default function ProfilePage() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+60 12-345 6789"
+                    readOnly={!isEditing}
+                    disabled={!isEditing}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="jobTitle">Jawatan</Label>
-                  <Input
-                    id="jobTitle"
-                    value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
-                  />
+                  <Input id="jobTitle" value={jobTitle} readOnly disabled />
+                  <p className="text-xs text-muted-foreground">
+                    Hanya pengurus boleh menukar jawatan.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="company">Syarikat</Label>
@@ -278,6 +315,8 @@ export default function ProfilePage() {
                     id="company"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
+                    readOnly={!isEditing}
+                    disabled={!isEditing}
                   />
                 </div>
               </div>
@@ -289,6 +328,8 @@ export default function ProfilePage() {
                   value={icNo}
                   onChange={(e) => setIcNo(e.target.value)}
                   placeholder="Cth: 010203-04-0506"
+                  readOnly={!isEditing}
+                  disabled={!isEditing}
                 />
               </div>
 
@@ -300,6 +341,8 @@ export default function ProfilePage() {
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Ceritakan sedikit tentang diri anda…"
+                  readOnly={!isEditing}
+                  disabled={!isEditing}
                 />
               </div>
 
@@ -310,6 +353,8 @@ export default function ProfilePage() {
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Cth: Kuala Lumpur"
+                  readOnly={!isEditing}
+                  disabled={!isEditing}
                 />
               </div>
 
@@ -325,17 +370,56 @@ export default function ProfilePage() {
                 </p>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  onClick={() => window.location.reload()}
-                  disabled={saving}
-                >
-                  Batal
-                </Button>
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving ? "Menyimpan…" : "Simpan Perubahan"}
-                </Button>
+              {isEditing && (
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => window.location.reload()}
+                    disabled={saving}
+                  >
+                    Batal
+                  </Button>
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving ? "Menyimpan…" : "Simpan Perubahan"}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Account */}
+        <TabsContent value="account">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Maklumat Akaun</CardTitle>
+              <CardDescription>
+                Butiran gaji dan pekerjaan anda. Hanya pengurus boleh mengemas
+                kini gaji mingguan.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Gaji Mingguan</Label>
+                  <p className="text-lg font-semibold">
+                    {weeklySalary != null
+                      ? formatMoney(weeklySalary)
+                      : "Belum ditetapkan"}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Had Mohon Gaji Awal (30%)</Label>
+                  <p className="text-lg font-semibold">
+                    {weeklySalary != null
+                      ? formatMoney(weeklySalary * 0.3)
+                      : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Jumlah maksimum boleh dipohon setiap minggu gaji
+                    (Sabtu–Khamis).
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -343,7 +427,6 @@ export default function ProfilePage() {
 
         {/* Placeholder tabs */}
         {[
-          { value: "account", title: "Akaun" },
           { value: "security", title: "Keselamatan" },
           { value: "notifications", title: "Notifikasi" },
         ].map((tab) => (

@@ -111,13 +111,19 @@ export default function DashboardShell({
       if (data.user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, status")
           .eq("id", data.user.id)
           .maybeSingle()
-        setRole(profile?.role ?? null)
+        // Accounts awaiting or refused approval have no business in the
+        // dashboard, even if they navigate here directly.
+        if (!profile || profile.status !== "approved") {
+          router.replace(profile ? "/menunggu-kelulusan" : "/register")
+          return
+        }
+        setRole(profile.role ?? null)
       }
     })
-  }, [])
+  }, [router])
 
   async function handleLogout() {
     await supabase.auth.signOut()

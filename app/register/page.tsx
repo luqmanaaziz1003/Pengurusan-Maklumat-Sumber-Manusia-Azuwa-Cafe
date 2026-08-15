@@ -50,13 +50,15 @@ export default function RegisterPage() {
 
       const { data: existing } = await supabase
         .from("profiles")
-        .select("id")
+        .select("id, status")
         .eq("id", session.user.id)
         .maybeSingle()
 
       if (!active) return
       if (existing) {
-        router.replace("/dashboard")
+        router.replace(
+          existing.status === "approved" ? "/dashboard" : "/menunggu-kelulusan"
+        )
         return
       }
 
@@ -95,7 +97,7 @@ export default function RegisterPage() {
       return
     }
 
-    router.replace("/dashboard")
+    router.replace("/menunggu-kelulusan")
   }
 
   // Avoid flashing the form before the session check resolves.
