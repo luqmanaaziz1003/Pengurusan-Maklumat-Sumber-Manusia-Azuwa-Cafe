@@ -34,15 +34,44 @@ type NavItem = {
   label: string
   Icon: React.ComponentType<{ className?: string }>
   href?: string
+  managerOnly?: boolean
+  staffOnly?: boolean
 }
+
+const MANAGER_ROLES = ["pengurus", "admin"]
 
 const NAV_ITEMS: NavItem[] = [
   { key: "home", label: "Halaman Utama", Icon: LayoutDashboard, href: "/dashboard" },
-  { key: "pekerja", label: "Senarai Pekerja", Icon: User },
-  { key: "cuti", label: "Mohon Cuti", Icon: Calendar, href: "/cuti" },
-  { key: "gaji", label: "Mohon Gaji Awal", Icon: Wallet, href: "/gaji" },
-  { key: "semak", label: "Semak Permohonan", Icon: ListChecks },
-  { key: "nilai", label: "Nilai Rakan Sekerja", Icon: Star },
+  {
+    key: "pekerja",
+    label: "Senarai Pekerja",
+    Icon: User,
+    href: "/senarai-pekerja",
+    managerOnly: true,
+  },
+  { key: "cuti", label: "Mohon Cuti", Icon: Calendar, href: "/cuti", staffOnly: true },
+  {
+    key: "gaji",
+    label: "Mohon Gaji Awal",
+    Icon: Wallet,
+    href: "/gaji",
+    staffOnly: true,
+  },
+  {
+    key: "semak-cuti",
+    label: "Semak Cuti",
+    Icon: ListChecks,
+    href: "/semak-cuti",
+    managerOnly: true,
+  },
+  {
+    key: "semak-gaji",
+    label: "Semak Gaji Awal",
+    Icon: Wallet,
+    href: "/semak-gaji",
+    managerOnly: true,
+  },
+  { key: "nilai", label: "Nilai Rakan Sekerja", Icon: Star, href: "/nilai-rakan" },
 ]
 
 export default function DashboardShell({
@@ -56,6 +85,13 @@ export default function DashboardShell({
   // Routed items reflect the URL; placeholder items use local highlight state.
   const [active, setActive] = useState("home")
   const [email, setEmail] = useState("")
+  const [role, setRole] = useState<string | null>(null)
+
+  const isManager = role != null && MANAGER_ROLES.includes(role)
+  const navItems = NAV_ITEMS.filter(
+    (item) =>
+      (!item.managerOnly || isManager) && (!item.staffOnly || !isManager)
+  )
 
   // Keep the highlight in sync with the current route on navigation/refresh.
   useEffect(() => {
@@ -67,10 +103,19 @@ export default function DashboardShell({
     if (match) setActive(match.key)
   }, [pathname])
 
-  // Show the signed-in account's email in the profile menu.
+  // Show the signed-in account's email in the profile menu, and load the role
+  // so manager-only navigation can be shown/hidden.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (data.user?.email) setEmail(data.user.email)
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .maybeSingle()
+        setRole(profile?.role ?? null)
+      }
     })
   }, [])
 
@@ -123,7 +168,7 @@ export default function DashboardShell({
         {/* Navigation */}
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           <ul className="space-y-1">
-            {NAV_ITEMS.map(({ key, label, Icon, href }) => {
+            {navItems.map(({ key, label, Icon, href }) => {
               const isActive = key === active
               return (
                 <li key={key}>

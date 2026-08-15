@@ -3,15 +3,15 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
-import { IdCard, User as UserIcon, Cake, Users, UserPlus } from "lucide-react"
+import { UserPlus } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,11 +33,10 @@ export default function RegisterPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Registration requires a Google session. Bounce to login if there's none,
-  // and skip the form entirely if this account is already registered.
+  // Registration needs a Google session. Bounce to login without one, and skip
+  // the form if this account already has a profile (already registered).
   useEffect(() => {
     let active = true
-
     async function init() {
       const {
         data: { session },
@@ -62,11 +61,9 @@ export default function RegisterPage() {
       }
 
       setUser(session.user)
-      // Prefill the name from the Google profile when available.
       const googleName = session.user.user_metadata?.full_name
       if (typeof googleName === "string") setFullName(googleName)
     }
-
     init()
     return () => {
       active = false
@@ -116,94 +113,76 @@ export default function RegisterPage() {
         {/* Top accent bar */}
         <div className="h-2 bg-primary" />
 
-        <CardHeader className="px-8 pt-10 text-center">
-          <CardTitle className="text-3xl font-bold text-primary">
+        <CardHeader className="px-8 pt-8 text-center">
+          <CardTitle className="text-2xl font-bold text-primary">
             Daftar Akaun
           </CardTitle>
-          <CardDescription className="mt-2">
+          <CardDescription className="mt-1">
             Selamat Datang pekerja baru Azuwa Cafe.
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="px-8 pt-6 pb-10">
+        <CardContent className="px-8 pt-6 pb-8">
           {/* Google account this profile is tied to */}
-          <p className="rounded-lg bg-muted px-4 py-2.5 text-center text-sm text-muted-foreground">
+          <p className="mb-6 rounded-lg bg-muted px-4 py-2.5 text-center text-sm text-muted-foreground">
             Akaun Google:{" "}
             <span className="font-semibold text-foreground">{user.email}</span>
           </p>
 
           {error && (
-            <p className="mt-4 rounded-lg bg-destructive/10 px-4 py-3 text-center text-sm text-destructive">
+            <p className="mb-4 rounded-lg bg-destructive/10 px-4 py-3 text-center text-sm text-destructive">
               {error}
             </p>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {/* Nama Penuh */}
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="fullName">Nama Penuh</Label>
-              <div className="relative">
-                <IdCard className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="fullName"
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Nama Penuh"
-                  className="h-11 pl-9"
-                />
-              </div>
+              <Input
+                id="fullName"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Nama penuh anda"
+                className="h-11"
+              />
             </div>
 
-            {/* Nama Pengguna */}
             <div className="space-y-1.5">
               <Label htmlFor="username">Nama Pengguna</Label>
-              <div className="relative">
-                <UserIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="username"
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Nama Pengguna"
-                  className="h-11 pl-9"
-                />
-              </div>
+              <Input
+                id="username"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Nama pengguna"
+                className="h-11"
+              />
             </div>
 
-            {/* Umur */}
             <div className="space-y-1.5">
               <Label htmlFor="age">Umur</Label>
-              <div className="relative">
-                <Cake className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="age"
-                  type="number"
-                  required
-                  min={1}
-                  max={120}
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                  placeholder="Umur"
-                  className="h-11 pl-9"
-                />
-              </div>
+              <Input
+                id="age"
+                type="number"
+                required
+                min={1}
+                max={120}
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="Umur anda"
+                className="h-11"
+              />
             </div>
 
-            {/* Peranan */}
             <div className="space-y-1.5">
-              <Label>Peranan</Label>
+              <Label htmlFor="role">Peranan</Label>
               <Select
                 value={role}
-                onValueChange={(value) => setRole(value ?? "")}
+                onValueChange={(value) => setRole((value as string) ?? "")}
               >
-                <SelectTrigger className="h-11 w-full">
-                  <div className="flex items-center gap-2">
-                    <Users className="size-4 text-muted-foreground" />
-                    <SelectValue placeholder="-- Pilih Peranan --" />
-                  </div>
+                <SelectTrigger id="role" className="h-11 w-full">
+                  <SelectValue placeholder="-- Pilih Peranan --" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pekerja">Pekerja</SelectItem>
@@ -213,12 +192,11 @@ export default function RegisterPage() {
               </Select>
             </div>
 
-            {/* Submit */}
             <Button
               type="submit"
               size="lg"
               disabled={saving}
-              className="h-12 w-full gap-2 text-base font-bold"
+              className="h-12 w-full gap-2 text-base font-semibold"
             >
               <UserPlus className="size-5" />
               {saving ? "Menyimpan…" : "Daftar Akaun"}

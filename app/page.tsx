@@ -45,8 +45,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
 
   // Runs when a session exists — either it already did, or we just returned
-  // from the Google redirect. The gmail/account is recorded in users on every
-  // login; whether they still need to register is decided by their profile.
+  // from the Google redirect. The gmail is recorded; a new account (no profile
+  // yet) is sent to the register card, a returning one to the dashboard.
   useEffect(() => {
     let handled = false
 
@@ -54,7 +54,7 @@ export default function LoginPage() {
       if (handled) return
       handled = true
 
-      // Record the gmail + refresh last_login on every login.
+      // Record the gmail + refresh last_login (best-effort; don't block login).
       await supabase.from("users").upsert(
         {
           id: user.id,
@@ -64,7 +64,7 @@ export default function LoginPage() {
         { onConflict: "id" }
       )
 
-      // A profile row means they've completed registration.
+      // A profile row means the account has completed registration.
       const { data, error } = await supabase
         .from("profiles")
         .select("id")
@@ -72,14 +72,22 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (error) {
-        console.error("Failed to look up profile:", error.message)
+        console.error("Failed to look up profile:", error)
+        setError(`Gagal log masuk: ${error.message}`)
+        setLoading(false)
         handled = false
         return
       }
 
-      // Returning user → dashboard; new gmail → collect their details first.
+      // New gmail → register to fill in details; returning → dashboard.
       router.replace(data ? "/dashboard" : "/register")
     }
+
+    // Handle both an already-active session (page load) and the auth event
+    // fired when returning from the Google redirect.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) routeAfterAuth(session.user)
+    })
 
     const {
       data: { subscription },

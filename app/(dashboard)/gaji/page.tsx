@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { HandCoins, Info, Send, ArrowLeft, CheckCircle2 } from "lucide-react"
+import {
+  HandCoins,
+  Info,
+  Send,
+  ArrowLeft,
+  CheckCircle2,
+  ClipboardList,
+} from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,10 +21,33 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { RequestStatusBadge } from "@/components/RequestStatusBadge"
+
+type AdvanceRequest = {
+  id: string
+  amount: number
+  reason: string | null
+  deduction_month: string | null
+  status: string
+  created_at: string
+}
+
+// Format a numeric amount as RM 0.00.
+function formatMoney(value: number): string {
+  return `RM ${value.toFixed(2)}`
+}
+
+// Format a yyyy-mm-dd (1st of month) as mm/yyyy.
+function formatMonth(value: string | null): string {
+  if (!value) return "—"
+  const [y, m] = value.split("-")
+  return m && y ? `${m}/${y}` : value
+}
 
 export default function MohonGajiAwalPage() {
   const router = useRouter()
   const [userId, setUserId] = useState("")
+  const [requests, setRequests] = useState<AdvanceRequest[]>([])
 
   const [amount, setAmount] = useState("")
   const [deductionMonth, setDeductionMonth] = useState("")
@@ -26,6 +56,15 @@ export default function MohonGajiAwalPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  async function loadRequests(uid: string) {
+    const { data } = await supabase
+      .from("salary_advance_applications")
+      .select("id, amount, reason, deduction_month, status, created_at")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false })
+    setRequests(data ?? [])
+  }
 
   useEffect(() => {
     let active = true
@@ -39,6 +78,7 @@ export default function MohonGajiAwalPage() {
         return
       }
       setUserId(user.id)
+      await loadRequests(user.id)
     }
     init()
     return () => {
@@ -81,10 +121,11 @@ export default function MohonGajiAwalPage() {
     setAmount("")
     setDeductionMonth("")
     setReason("")
+    loadRequests(userId)
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl space-y-6">
       <Card className="p-0">
         <CardHeader className="border-b px-6 py-5">
           <CardTitle className="flex items-center gap-2 text-xl text-primary">
@@ -192,6 +233,48 @@ export default function MohonGajiAwalPage() {
               Kembali
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Request history */}
+      <Card className="p-0">
+        <CardHeader className="border-b px-6 py-5">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ClipboardList className="size-5 text-primary" />
+            Sejarah Permohonan
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-6 py-6">
+          {requests.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Belum ada permohonan gaji awal.
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {requests.map((req) => (
+                <li
+                  key={req.id}
+                  className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {formatMoney(req.amount)}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · Potongan {formatMonth(req.deduction_month)}
+                      </span>
+                    </p>
+                    {req.reason && (
+                      <p className="truncate text-sm text-muted-foreground">
+                        {req.reason}
+                      </p>
+                    )}
+                  </div>
+                  <RequestStatusBadge status={req.status} />
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>
