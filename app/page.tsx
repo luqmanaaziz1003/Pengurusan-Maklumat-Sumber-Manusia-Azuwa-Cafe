@@ -67,7 +67,7 @@ export default function LoginPage() {
       // A profile row means the account has completed registration.
       const { data, error } = await supabase
         .from("profiles")
-        .select("id")
+        .select("id, status")
         .eq("id", user.id)
         .maybeSingle()
 
@@ -79,8 +79,15 @@ export default function LoginPage() {
         return
       }
 
-      // New gmail → register to fill in details; returning → dashboard.
-      router.replace(data ? "/dashboard" : "/register")
+      // New gmail → register to fill in details; registered but not yet
+      // approved by a manager → waiting page; approved → dashboard.
+      if (!data) {
+        router.replace("/register")
+      } else if (data.status === "approved") {
+        router.replace("/dashboard")
+      } else {
+        router.replace("/menunggu-kelulusan")
+      }
     }
 
     // Handle both an already-active session (page load) and the auth event

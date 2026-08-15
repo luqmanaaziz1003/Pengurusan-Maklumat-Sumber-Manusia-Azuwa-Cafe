@@ -44,10 +44,31 @@ function formatMonth(value: string | null): string {
   return m && y ? `${m}/${y}` : value
 }
 
+const ADVANCE_LIMIT_RATIO = 0.3
+
+// Pay week runs Saturday → Thursday (salary is paid every Thursday; Friday is
+// a day off and doesn't belong to any week). Returns the [start, endExclusive)
+// bounds of the pay week that `date` falls in — Friday is treated as already
+// belonging to the upcoming week, since Thursday's payment just reset it.
+function getPayWeekRange(date: Date): { start: Date; endExclusive: Date } {
+  const day = date.getDay() // Sun=0 … Sat=6
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  if (day === 5) {
+    start.setDate(start.getDate() + 1)
+  } else {
+    const daysSinceSaturday = (day + 1) % 7
+    start.setDate(start.getDate() - daysSinceSaturday)
+  }
+  const endExclusive = new Date(start)
+  endExclusive.setDate(endExclusive.getDate() + 6) // through Thursday, up to next Friday
+  return { start, endExclusive }
+}
+
 export default function MohonGajiAwalPage() {
   const router = useRouter()
   const [userId, setUserId] = useState("")
   const [requests, setRequests] = useState<AdvanceRequest[]>([])
+  const [weeklySalary, setWeeklySalary] = useState<number | null>(null)
 
   const [amount, setAmount] = useState("")
   const [deductionMonth, setDeductionMonth] = useState("")
@@ -56,6 +77,21 @@ export default function MohonGajiAwalPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  const maxAmount =
+    weeklySalary != null ? weeklySalary * ADVANCE_LIMIT_RATIO : null
+
+  const { start: weekStart, endExclusive: weekEndExclusive } =
+    getPayWeekRange(new Date())
+  const usedThisWeek = requests
+    .filter((r) => {
+      if (r.status === "rejected") return false
+      const created = new Date(r.created_at)
+      return created >= weekStart && created < weekEndExclusive
+    })
+    .reduce((sum, r) => sum + r.amount, 0)
+  const remainingThisWeek =
+    maxAmount != null ? Math.max(0, maxAmount - usedThisWeek) : null
 
   async function loadRequests(uid: string) {
     const { data } = await supabase
@@ -78,6 +114,15 @@ export default function MohonGajiAwalPage() {
         return
       }
       setUserId(user.id)
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("weekly_salary")
+        .eq("id", user.id)
+        .maybeSingle()
+      if (!active) return
+      setWeeklySalary(profile?.weekly_salary ?? null)
+
       await loadRequests(user.id)
     }
     init()
@@ -93,6 +138,14 @@ export default function MohonGajiAwalPage() {
     const value = Number(amount)
     if (!amount || Number.isNaN(value) || value <= 0) {
       setError("Sila masukkan jumlah pendahuluan yang sah.")
+      return
+    }
+    if (remainingThisWeek != null && value > remainingThisWeek) {
+      setError(
+        `Jumlah pendahuluan melebihi baki had minggu ini. Anda boleh memohon sehingga ${formatMoney(
+          remainingThisWeek
+        )} lagi minggu ini (had mingguan 30% = ${formatMoney(maxAmount ?? 0)}).`
+      )
       return
     }
     if (!reason.trim()) {
@@ -140,7 +193,11 @@ export default function MohonGajiAwalPage() {
             <Info className="mt-0.5 size-4 shrink-0 text-primary" />
             <p>
               <span className="font-semibold">Nota:</span> Pendahuluan gaji akan
-              ditolak daripada gaji pada bulan potongan yang dipilih.
+              ditolak daripada gaji pada bulan potongan yang dipilih. Anda boleh
+              memohon berkali-kali dalam minggu yang sama selagi jumlah
+              keseluruhan tidak melebihi 30% gaji mingguan anda. Minggu gaji
+              bermula Sabtu dan berakhir Khamis (gaji dibayar setiap Khamis;
+              Jumaat cuti).
             </p>
           </div>
 
@@ -170,6 +227,7 @@ export default function MohonGajiAwalPage() {
                   id="amount"
                   type="number"
                   min="1"
+                  max={remainingThisWeek ?? undefined}
                   step="0.01"
                   inputMode="decimal"
                   required
@@ -182,6 +240,15 @@ export default function MohonGajiAwalPage() {
                   className="h-11 pl-10"
                 />
               </div>
+              <p className="text-xs text-muted-foreground">
+                {maxAmount != null
+                  ? `Had mingguan (30% gaji mingguan): ${formatMoney(
+                      maxAmount
+                    )}. Baki boleh dipohon minggu ini: ${formatMoney(
+                      remainingThisWeek ?? 0
+                    )}.`
+                  : "Had permohonan ialah 30% daripada gaji mingguan anda."}
+              </p>
             </div>
 
             <div className="space-y-1.5">

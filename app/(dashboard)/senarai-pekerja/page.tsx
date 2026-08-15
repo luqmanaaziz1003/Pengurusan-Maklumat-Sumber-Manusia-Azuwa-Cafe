@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Users, Inbox, CheckCircle2, Save } from "lucide-react"
+import { Users, Inbox, CheckCircle2, Save, Check, X, UserCog } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import {
   Card,
@@ -38,6 +38,7 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const MANAGER_ROLES = ["pengurus", "admin"]
 
@@ -57,6 +58,15 @@ type StaffRow = {
   phone: string | null
   avatar_url: string | null
   weekly_salary: number | null
+}
+
+type PendingRow = {
+  id: string
+  full_name: string | null
+  username: string | null
+  age: number | null
+  role: string | null
+  created_at: string
 }
 
 // Format a numeric amount as RM 0.00.
@@ -79,6 +89,10 @@ export default function SenaraiPekerjaPage() {
   const [staff, setStaff] = useState<StaffRow[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  const [pending, setPending] = useState<PendingRow[]>([])
+  const [pendingError, setPendingError] = useState<string | null>(null)
+  const [decidingId, setDecidingId] = useState<string | null>(null)
+
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editRole, setEditRole] = useState("")
   const [editSalary, setEditSalary] = useState("")
@@ -94,6 +108,7 @@ export default function SenaraiPekerjaPage() {
         "id, full_name, username, age, role, job_title, phone, avatar_url, weekly_salary"
       )
       .ilike("role", "pekerja")
+      .eq("status", "approved")
       .neq("id", excludeId)
       .order("full_name", { ascending: true })
 
@@ -106,6 +121,39 @@ export default function SenaraiPekerjaPage() {
     }
     setLoadError(null)
     setStaff(data ?? [])
+  }
+
+  async function loadPending(excludeId: string) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, age, role, created_at")
+      .eq("status", "pending")
+      .neq("id", excludeId)
+      .order("created_at", { ascending: true })
+
+    if (error) {
+      setPendingError(error.message)
+      setPending([])
+      return
+    }
+    setPendingError(null)
+    setPending(data ?? [])
+  }
+
+  async function handleDecision(id: string, status: "approved" | "rejected") {
+    setDecidingId(id)
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status })
+      .eq("id", id)
+    if (!error) {
+      setPending((prev) => prev.filter((p) => p.id !== id))
+      if (status === "approved") {
+        const { data: user } = await supabase.auth.getUser()
+        if (user.user) await loadStaff(user.user.id)
+      }
+    }
+    setDecidingId(null)
   }
 
   useEffect(() => {
@@ -134,7 +182,7 @@ export default function SenaraiPekerjaPage() {
       }
 
       setAuthorized(true)
-      await loadStaff(user.id)
+      await Promise.all([loadStaff(user.id), loadPending(user.id)])
     }
     init()
     return () => {
@@ -216,13 +264,24 @@ export default function SenaraiPekerjaPage() {
           <CardTitle className="flex items-center gap-2 text-xl text-primary">
             <Users className="size-6" />
             Senarai Pekerja
-            <Badge variant="secondary" className="ml-1">
-              {staff.length}
-            </Badge>
           </CardTitle>
         </CardHeader>
 
         <CardContent className="p-0">
+          <Tabs defaultValue="staff" className="gap-0">
+            <TabsList className="mx-6 mt-4 h-9 w-[calc(100%-3rem)] sm:w-auto">
+              <TabsTrigger value="staff" className="gap-1.5">
+                Pekerja
+                <Badge variant="secondary">{staff.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="pending" className="gap-1.5">
+                <UserCog className="size-4" />
+                Akaun Belum Disahkan
+                <Badge variant="secondary">{pending.length}</Badge>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="staff" className="mt-4">
           {loadError ? (
             <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-destructive">
               <Inbox className="size-8" />
@@ -311,6 +370,79 @@ export default function SenaraiPekerjaPage() {
               </TableBody>
             </Table>
           )}
+            </TabsContent>
+
+            <TabsContent value="pending" className="mt-4">
+              {pendingError ? (
+                <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-destructive">
+                  <Inbox className="size-8" />
+                  <p className="text-sm font-medium">
+                    Gagal memuatkan akaun belum disahkan.
+                  </p>
+                  <p className="max-w-md text-xs text-destructive/80">
+                    {pendingError}
+                  </p>
+                </div>
+              ) : pending.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-muted-foreground">
+                  <Inbox className="size-8" />
+                  <p className="text-sm">Tiada akaun menunggu kelulusan.</p>
+                </div>
+              ) : (
+                <ul className="divide-y px-6 pb-4">
+                  {pending.map((person) => (
+                    <li
+                      key={person.id}
+                      className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar size="lg">
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {initials(person.full_name, person.username)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            {person.full_name || "—"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {person.username && <>@{person.username} · </>}
+                            {person.age != null && <>{person.age} tahun · </>}
+                            Memohon sebagai{" "}
+                            {person.role
+                              ? ROLE_LABELS[person.role] ?? person.role
+                              : "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleDecision(person.id, "approved")}
+                          disabled={decidingId === person.id}
+                          className="gap-1.5 bg-green-600 text-white hover:bg-green-700"
+                        >
+                          <Check className="size-4" />
+                          Lulus
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDecision(person.id, "rejected")}
+                          disabled={decidingId === person.id}
+                          className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <X className="size-4" />
+                          Tolak
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
