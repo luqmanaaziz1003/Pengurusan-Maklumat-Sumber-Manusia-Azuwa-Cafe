@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import AttendanceQrSheet from "@/components/AttendanceQrSheet"
 
 type NavItem = {
   key: string
@@ -36,6 +37,7 @@ type NavItem = {
   href?: string
   managerOnly?: boolean
   staffOnly?: boolean
+  adminOnly?: boolean
 }
 
 const MANAGER_ROLES = ["pengurus", "admin"]
@@ -71,7 +73,22 @@ const NAV_ITEMS: NavItem[] = [
     href: "/semak-gaji",
     managerOnly: true,
   },
-  { key: "nilai", label: "Nilai Rakan Sekerja", Icon: Star, href: "/nilai-rakan" },
+  {
+    key: "qr-kehadiran",
+    label: "QR Kehadiran",
+    Icon: QrCode,
+    href: "/qr-kehadiran",
+    managerOnly: true,
+  },
+  {
+    key: "nilai",
+    label: "Nilai Rakan Sekerja",
+    Icon: Star,
+    href: "/nilai-rakan",
+    // Hidden for pekerja and pengurus for now — keep the page, just don't
+    // surface it in nav until this is ready to launch.
+    adminOnly: true,
+  },
 ]
 
 export default function DashboardShell({
@@ -86,11 +103,14 @@ export default function DashboardShell({
   const [active, setActive] = useState("home")
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<string | null>(null)
+  const [qrOpen, setQrOpen] = useState(false)
 
   const isManager = role != null && MANAGER_ROLES.includes(role)
   const navItems = NAV_ITEMS.filter(
     (item) =>
-      (!item.managerOnly || isManager) && (!item.staffOnly || !isManager)
+      (!item.managerOnly || isManager) &&
+      (!item.staffOnly || !isManager) &&
+      (!item.adminOnly || role === "admin")
   )
 
   // Keep the highlight in sync with the current route on navigation/refresh.
@@ -285,7 +305,14 @@ export default function DashboardShell({
             <Button variant="ghost" size="icon" aria-label="Pencapaian">
               <Award className="size-5 text-amber-400" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Imbas QR">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={isManager ? "Jana Kod QR" : "Imbas QR"}
+              onClick={() =>
+                isManager ? router.push("/qr-kehadiran") : setQrOpen(true)
+              }
+            >
               <QrCode className="size-5" />
             </Button>
           </div>
@@ -294,6 +321,10 @@ export default function DashboardShell({
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
+
+      {!isManager && (
+        <AttendanceQrSheet open={qrOpen} onOpenChange={setQrOpen} />
+      )}
     </div>
   )
 }
